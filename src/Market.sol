@@ -41,7 +41,7 @@ contract Market is EIP712("NFTMarket", "1"){
         PermitUtil.Signature memory erc20PaymentSig,
         PermitUtil.Signature memory erc721OnMarketSig,
         PermitUtil.Signature memory erc721BuySig
-    ) external {
+    ) external payable {
         if(value != payment)
             revert("the two sides should negotiate a same price of the good");
 
@@ -102,21 +102,28 @@ contract Market is EIP712("NFTMarket", "1"){
         );
         require(suc1, "on market permit failed");
 
-        // Once successfully invoked, the erc20 payment will be sent to the owner.
-        (bool suc2, ) = currency.call(
-            abi.encodeWithSignature(
-                "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)", 
-                buyer,
-                owner,
-                value,
-                paymentDeadline,
-                erc20PaymentSig.v,
-                erc20PaymentSig.r,
-                erc20PaymentSig.s
-            )
-        );
-        require(suc2, "erc20 payment permit failed");
+        if(msg.value != 0){
+            require(msg.value == value, "wrong eth payment amount");
+            payable(owner).transfer(msg.value);
+        } else {
+            // Once successfully invoked, the erc20 payment will be sent to the owner.
+            (bool suc2, ) = currency.call(
+                abi.encodeWithSignature(
+                    "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)", 
+                    buyer,
+                    owner,
+                    value,
+                    paymentDeadline,
+                    erc20PaymentSig.v,
+                    erc20PaymentSig.r,
+                    erc20PaymentSig.s
+                )
+            );
+            require(suc2, "erc20 payment permit failed");
+        }
 
         IERC721(goods).safeTransferFrom(owner, buyer, tokenId);
     }
+
+    receive() external payable {}
 }
